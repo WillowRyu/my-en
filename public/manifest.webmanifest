@@ -1,0 +1,9 @@
+{
+  "id": "/", "name": "my-en · 나의 작은 영어 습관", "short_name": "my-en",
+  "lang": "ko", "start_url": "/", "scope": "/", "display": "standalone",
+  "background_color": "#f2f6fa", "theme_color": "#245bb5",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

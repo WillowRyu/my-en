@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-10-04T03:12:54.846Z",
+  "source": "Local macOS Samantha voice",
+  "usage": "personal, non-commercial only; replace before public sharing",
+  "phrases": [
+    {
+      "id": "hello",
+      "text": "Hello.",
+      "file": "hello.wav"
+    },
+    {
+      "id": "name",
+      "text": "I'm Ryu.",
+      "file": "name.wav"
+    },
+    {
+      "id": "again",
+      "text": "Say that again, please.",
+      "file": "again.wav"
+    },
+    {
+      "id": "nice",
+      "text": "Nice to meet you.",
+      "file": "nice.wav"
+    },
+    {
+      "id": "thanks",
+      "text": "Thank you.",
+      "file": "thanks.wav"
+    },
+    {
+      "id": "water",
+      "text": "Water, please.",
+      "file": "water.wav"
+    },
+    {
+      "id": "coffee",
+      "text": "Coffee, please.",
+      "file": "coffee.wav"
+    },
+    {
+      "id": "price",
+      "text": "How much is it?",
+      "file": "price.wav"
+    },
+    {
+      "id": "card",
+      "text": "Can I pay by card?",
+      "file": "card.wav"
+    },
+    {
+      "id": "restroom",
+      "text": "Where is the restroom?",
+      "file": "restroom.wav"
+    },
+    {
+      "id": "near",
+      "text": "Is it near here?",
+      "file": "near.wav"
+    },
+    {
+      "id": "hungry",
+      "text": "I'm hungry.",
+      "file": "hungry.wav"
+    },
+    {
+      "id": "break",
+      "text": "I need a break.",
+      "file": "break.wav"
+    },
+    {
+      "id": "good",
+      "text": "That sounds good.",
+      "file": "good.wav"
+    },
+    {
+      "id": "tomorrow",
+      "text": "See you tomorrow.",
+      "file": "tomorrow.wav"
+    }
+  ]
+}
