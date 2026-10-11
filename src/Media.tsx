@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { FileAudioAdapter } from './audio'
-import type { Phrase } from './content'
+import type { AudioSource } from './audio'
 import { Icon } from './icons'
 
-export function ListenButton({ phrase, onHeard }: { phrase: Phrase; onHeard?: () => void }) {
+export function ListenButton({ phrase, onHeard }: { phrase: AudioSource; onHeard?: () => void }) {
   const adapter = useRef<FileAudioAdapter | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'playing'>('idle')
   const [error, setError] = useState('')

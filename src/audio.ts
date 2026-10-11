@@ -1,15 +1,15 @@
-import type { Phrase } from './content'
+export interface AudioSource { audio: string }
 
 // Future providers must implement this contract. The MVP only uses same-origin files.
 // No keys, speech upload, network speech recognition, or pronunciation scoring.
 export interface LessonAudioAdapter {
-  play(phrase: Phrase, slow: boolean, ended: () => void): Promise<void>
+  play(phrase: AudioSource, slow: boolean, ended: () => void): Promise<void>
   stop(): void
 }
 export class FileAudioAdapter implements LessonAudioAdapter {
   private audio: HTMLAudioElement | null = null
   private timer: ReturnType<typeof setTimeout> | undefined
-  play(phrase: Phrase, slow: boolean, ended: () => void): Promise<void> {
+  play(phrase: AudioSource, slow: boolean, ended: () => void): Promise<void> {
     this.stop()
     return new Promise((resolve, reject) => {
       const audio = new Audio(phrase.audio)

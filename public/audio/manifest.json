@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-04T03:12:54.846Z",
+  "generatedAt": "2026-10-08T01:53:55.779Z",
   "source": "Local macOS Samantha voice",
   "usage": "personal, non-commercial only; replace before public sharing",
   "phrases": [
@@ -77,6 +77,88 @@
       "id": "tomorrow",
       "text": "See you tomorrow.",
       "file": "tomorrow.wav"
+    }
+  ],
+  "words": [
+    {
+      "id": "hello",
+      "text": "hello",
+      "file": "word-hello.wav"
+    },
+    {
+      "id": "again",
+      "text": "again",
+      "file": "word-again.wav"
+    },
+    {
+      "id": "please",
+      "text": "please",
+      "file": "word-please.wav"
+    },
+    {
+      "id": "nice",
+      "text": "nice",
+      "file": "word-nice.wav"
+    },
+    {
+      "id": "thank",
+      "text": "thank",
+      "file": "word-thank.wav"
+    },
+    {
+      "id": "water",
+      "text": "water",
+      "file": "word-water.wav"
+    },
+    {
+      "id": "coffee",
+      "text": "coffee",
+      "file": "word-coffee.wav"
+    },
+    {
+      "id": "much",
+      "text": "much",
+      "file": "word-much.wav"
+    },
+    {
+      "id": "card",
+      "text": "card",
+      "file": "word-card.wav"
+    },
+    {
+      "id": "where",
+      "text": "where",
+      "file": "word-where.wav"
+    },
+    {
+      "id": "restroom",
+      "text": "restroom",
+      "file": "word-restroom.wav"
+    },
+    {
+      "id": "near",
+      "text": "near",
+      "file": "word-near.wav"
+    },
+    {
+      "id": "hungry",
+      "text": "hungry",
+      "file": "word-hungry.wav"
+    },
+    {
+      "id": "break",
+      "text": "break",
+      "file": "word-break.wav"
+    },
+    {
+      "id": "good",
+      "text": "good",
+      "file": "word-good.wav"
+    },
+    {
+      "id": "tomorrow",
+      "text": "tomorrow",
+      "file": "word-tomorrow.wav"
     }
   ]
 }

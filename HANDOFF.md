@@ -55,3 +55,12 @@ WebKit 오프라인은 setOffline 도구 제한 때문에 자체 임시서버 �
 - 최신 커밋과 동기화 여부는 git log -1 / git status --short --branch / git ls-remote --heads origin master로 확인.
 
 커밋 전 재검증: `npm run check` 통과(타입·lint·단위 20/20·빌드), Chromium/WebKit 모바일·데스크톱 `test:e2e` 40/40 통과. 브라우저 테스트가 띄운 my-en 서버는 테스트 종료 시 정리됨. 실기기 마이크 검증과는 구분.
+
+## 어휘 연결과 기록 보완 · 2026-10-08 (구현·검증 완료)
+
+- 작업 사본: `/Users/ryu-medi/Documents/Codex/2026-10-08/task-2/my-en-work`. 기준 HEAD 9908890. 사용자 직접 승인 후 검증된 소스·문서·테스트·음성·빌드 등 76개 파일을 원본 `/Users/ryu-medi/Desktop/projects/my-en`에 반영하고 체크섬 일치를 확인. 브랜치 master와 HEAD는 유지하며 변경 사항은 미커밋 상태. 기존 설정·브라우저 학습 기록·의존성·Git 메타데이터는 건드리지 않음. 커밋·푸시·배포 없음.
+- 새 `legacy.ts`: 기존 v1 구조 검증. `model.ts`: schemaVersion 2, 정규 완료 판정, due skill/word direction, 당일 간격 보호, 문장 조합 오답, 단어 기록. 기존 저장 키 유지. 첫 이관 원본은 `my-en:migration:v1`로 별도 보관.
+- 새 `WordStudy.tsx`: 뜻/소리→양방향 어휘 회상→연결 문장. 하루 새 단어 기본 2개(설정 1~3), 짧은 모드 1개. 단어 WAV 16개 추가, 총 음성 31개. 공개 전 교체 제약 유지.
+- `storage.ts`는 `{saved, backupSaved, warning}` 반환. 복원/초기화/설정은 저장 성공을 확인해 안내. 손상 원본·미지원 버전 자동 덮어쓰기 차단 유지.
+- 타입·lint 통과, 단위 43/43 실제 통과. build 통과(오프라인 39파일/31음성). Chromium/WebKit desktop/mobile E2E 60/60 실제 통과, 마지막 버튼 배치 변경 관련 4/4 추가 통과. 전부 단일 worker, 부하 상한 8 아래에서 실행. 테스트 서버/임시 브라우저 정리 확인. 전체 60개 HTML 보고서는 `playwright-report/index.html`, 화면은 docs/screenshots. 실제 사용자 마이크·음질·키보드·학습 효과와 구분.
+- 외부 AI·음성 업로드·유료 호출·의존성 설치·커밋·푸시·배포 안 함. 테스트는 단일 worker로 직렬 실행. 단어 학습 기본 버튼은 음성 없이 진행 가능. 하루 새 단어 1~3개 설정(기본2), 당일 여러 세션에도 상한 유지. 16개는 첫 7일 표현에서 뽑은 초기 연결 어휘이고 추가100개 과정은 구현하지 않음.

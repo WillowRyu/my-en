@@ -2,13 +2,13 @@ import { test, expect, type Page } from '@playwright/test'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { resolve } from 'node:path'
-import { phraseById, phrases } from '../src/content'
-import { emptyState, startSession, type State, type Step } from '../src/model'
-declare global { interface Window { myEnTestStream: MediaStream; myEnLateStream: MediaStream } }
+import { phraseById, phrases, wordById, words } from '../src/content'
+import { emptyState, skipWordStudy, startSession, type State, type Step } from '../src/model'
+declare global { interface Window { myEnTestStream: MediaStream; myEnLateStream: MediaStream; myEnOriginalSetItem: Storage['setItem'] } }
 const key = 'my-en:progress:v1'
 async function stored(page: Page): Promise<State> { return page.evaluate(k => JSON.parse(localStorage.getItem(k)!), key) }
 async function seed(page: Page, step: Step = 'listen', mode: 'normal' | 'quick' = 'quick') {
-  let s = startSession(emptyState('UTC'), mode, new Date(), `test-${step}`)
+  let s = skipWordStudy(startSession(emptyState('UTC'), mode, new Date(), `test-${step}`), new Date())
   s = { ...s, active: { ...s.active!, step, heard: step !== 'listen', phraseIds: ['hello', 'name'] } }
   await page.addInitScript(({ key, state }) => { if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(state)) }, { key, state: s })
   await page.goto('/#study')
@@ -22,7 +22,21 @@ async function listen(page: Page) {
   await expect(page.getByRole('button', { name: '뜻 확인하기', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: '뜻 확인하기', exact: true }).click()
 }
+async function finishWords(page: Page, noSound = false) {
+  for (let n = 0; n < 15; n++) {
+    const s = await stored(page), w = s.active?.wordStudy
+    if (!w) return
+    const word = wordById[w.wordIds[w.wordIndex]]
+    if (w.step === 'learn') {
+      if (noSound) await page.getByRole('button', { name: '단어 뜻 확인하기', exact: true }).click()
+      else { await page.getByRole('button', { name: '모범 음성 듣기', exact: true }).click(); await page.getByRole('button', { name: '단어 뜻 확인하기', exact: true }).click() }
+    } else if (w.step === 'meaning') await page.getByRole('button', { name: word.ko, exact: true }).click()
+    else { await page.getByLabel('영어 단어', { exact: true }).fill(word.en); await page.getByRole('button', { name: '단어 확인', exact: true }).click() }
+  }
+  throw new Error('Word steps did not finish')
+}
 async function finishCurrent(page: Page, noSound = false) {
+  await finishWords(page, noSound)
   for (let n = 0; n < 8; n++) {
     const s = await stored(page)
     if (!s.active) break
@@ -44,6 +58,7 @@ test('home, real audio, entire first lesson, separate evidence and no duplicate 
   mkdirSync('docs/screenshots', { recursive: true })
   await page.screenshot({ path: `docs/screenshots/${info.project.name}-home.png`, fullPage: true })
   await page.getByRole('button', { name: '오늘 공부 시작', exact: true }).click()
+  await finishWords(page)
   await expect(page.getByRole('button', { name: '뜻 확인하기' })).toBeDisabled()
   await page.screenshot({ path: `docs/screenshots/${info.project.name}-study.png`, fullPage: true })
   await finishCurrent(page)
@@ -183,6 +198,7 @@ test('offline reload includes all audio, cached range playback, and progress', a
   if (server) { server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())) }
   else await context.setOffline(true)
   await page.reload()
+  await finishWords(page)
   await listen(page)
   await expect(page.getByRole('heading', { name: '방금 표현은 어떤 뜻일까요?' })).toBeVisible()
   const cached = await page.evaluate(async () => {
@@ -231,7 +247,7 @@ test('corrupt storage stays untouched until explicit recovery and keyboard actio
 })
 
 test('all bundled audio have real PCM samples, UI fits 320px and large desktop', async ({ page, request }) => {
-  for (const p of phrases) {
+  for (const p of [...phrases, ...words]) {
     const response = await request.get(p.audio); expect(response.ok()).toBe(true)
     const buffer = await response.body()
     expect(buffer.toString('ascii', 0, 4)).toBe('RIFF')
@@ -248,10 +264,117 @@ test('all bundled audio have real PCM samples, UI fits 320px and large desktop',
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.getByRole('button', { name: '오늘 공부 시작', exact: true }).click()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    expect(await page.getByRole('button', { name: '뜻 확인하기' }).evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(48)
+    expect(await page.getByRole('button', { name: '단어 뜻 확인하기' }).evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(48)
     await page.getByRole('button', { name: '잠깐 쉬기' }).click()
     await page.getByRole('link', { name: '설정과 백업', exact: true }).click()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.evaluate(k => localStorage.removeItem(k), key)
   }
+})
+
+test('words: wrong meaning, reverse recall, hint/input resume, and sentence connection', async ({ page }, info) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: '오늘 공부 시작', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '이 단어부터 만나 볼까요?' })).toBeVisible()
+  expect(await page.getByRole('button', { name: '단어 뜻 확인하기', exact: true }).evaluate(el => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return hit === el || !!hit && el.contains(hit) })).toBe(true)
+  mkdirSync('docs/screenshots', { recursive: true })
+  await page.screenshot({ path: `docs/screenshots/${info.project.name}-word.png`, fullPage: true })
+  await page.getByRole('button', { name: '단어 뜻 확인하기', exact: true }).click()
+  await page.getByRole('button', { name: '감사합니다', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: '뜻이 조금 달라요' })).toBeVisible()
+  await page.getByRole('button', { name: '안녕하세요', exact: true }).click()
+  await page.screenshot({ path: `docs/screenshots/${info.project.name}-word-recall.png`, fullPage: true })
+  await page.getByLabel('영어 단어', { exact: true }).fill('hell')
+  await page.getByRole('button', { name: '단어 확인', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: '아직 조금 달라요' })).toBeVisible()
+  await page.getByRole('button', { name: '첫 글자 힌트' }).click()
+  await page.reload()
+  await expect(page.getByLabel('영어 단어', { exact: true })).toHaveValue('hell')
+  await page.getByLabel('영어 단어', { exact: true }).fill('HELLO')
+  await page.getByRole('button', { name: '단어 확인', exact: true }).click()
+  await finishWords(page, true)
+  await expect(page.getByRole('heading', { name: '먼저, 소리를 들어 보세요.' })).toBeVisible()
+  const s = await stored(page)
+  expect(s.wordReviews['hello:meaning'].lastOutcome).toBe('difficulty')
+  expect(s.wordReviews['hello:production']).toMatchObject({ lastOutcome: 'difficulty', successes: 0 })
+  await page.getByRole('link', { name: '나의 기록', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '문장에 쓰는 단어' })).toBeVisible()
+  await expect(page.getByText('다시 연습해요', { exact: true })).toHaveCount(2)
+})
+
+test('quick completion still offers regular lesson today', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: '5분만 공부하기' }).click()
+  await finishCurrent(page, true)
+  await page.getByRole('button', { name: '오늘은 여기까지', exact: true }).click()
+  await expect(page.getByRole('button', { name: '오늘 공부 시작', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '오늘 공부 시작', exact: true }).click()
+  expect((await stored(page)).active?.lessonId).toBe('day-1')
+})
+
+test('v1 import and load preserve in-flight lesson, exact original bytes, and export v2', async ({ page }) => {
+  const current = skipWordStudy(startSession(emptyState('UTC'), 'normal', new Date(), 'old-session'), new Date())
+  const old = { schemaVersion: 1, settings: { timeZone: 'UTC', intervals: [1, 3, 7, 14] },
+    active: Object.fromEntries(Object.entries({ ...current.active!, step: 'arrange', selectedTokens: [0], hints: 2 }).filter(([k]) => !['wordStudy', 'reviewSkills'].includes(k))),
+    attempts: [], reviews: {}, completions: [] }
+  const raw = JSON.stringify(old)
+  await page.addInitScript(({ key, raw }) => { if (!localStorage.getItem(key)) localStorage.setItem(key, raw) }, { key, raw })
+  await page.goto('/#study')
+  await expect(page.getByRole('button', { name: 'Hello. 빼기' })).toBeVisible()
+  expect(await page.evaluate(k => localStorage.getItem(k), key)).toBe(raw)
+  await page.getByRole('button', { name: '문장 확인', exact: true }).click()
+  expect((await stored(page)).schemaVersion).toBe(2)
+  expect(await page.evaluate(() => localStorage.getItem('my-en:previous:v1'))).toBe(raw)
+  await page.getByRole('link', { name: '설정과 백업', exact: true }).click()
+  await page.locator('input[type=file]').setInputFiles({ name: 'v1.json', mimeType: 'application/json', buffer: Buffer.from(raw) })
+  await page.getByRole('button', { name: '이 백업으로 복원' }).click()
+  expect((await stored(page)).active).toMatchObject({ step: 'arrange', hints: 2, selectedTokens: [0], wordStudy: null })
+  const exportPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: '백업 내려받기', exact: true }).click()
+  const exported = await exportPromise
+  expect(JSON.parse(readFileSync((await exported.path())!, 'utf8'))).toEqual(await stored(page))
+  const originalPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: '업데이트 전 원본 내려받기' }).click()
+  expect(readFileSync((await (await originalPromise).path())!, 'utf8')).toBe(raw)
+})
+
+test('failed restore shows failure and keeps persisted progress and download available', async ({ page }) => {
+  await seed(page, 'arrange')
+  const before = await stored(page)
+  await page.getByRole('link', { name: '설정과 백업', exact: true }).click()
+  const restored = { ...before, active: { ...before.active!, step: 'speak' } }
+  await page.locator('input[type=file]').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(restored)) })
+  await page.evaluate(() => { Object.defineProperty(window, 'myEnOriginalSetItem', { value: Storage.prototype.setItem, configurable: true }); Storage.prototype.setItem = () => { throw new DOMException('quota', 'QuotaExceededError') } })
+  await page.getByRole('button', { name: '이 백업으로 복원' }).click()
+  await expect(page.getByRole('alert').filter({ hasText: '복원 내용을 저장하지 못했습니다' })).toBeVisible()
+  await expect(page.getByText('백업을 복원하고 저장했습니다.', { exact: false })).toHaveCount(0)
+  expect(await stored(page)).toEqual(before)
+  await page.getByRole('button', { name: '이 백업으로 복원' }).click()
+  await expect(page.getByText('백업을 복원하고 저장했습니다.', { exact: false })).toHaveCount(0)
+  expect(await stored(page)).toEqual(before)
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: '백업 내려받기', exact: true }).click()
+  const exported = await download
+  expect(exported.suggestedFilename()).toMatch(/my-en-backup/)
+  expect(JSON.parse(readFileSync((await exported.path())!, 'utf8'))).toEqual(restored)
+  await page.evaluate(() => { Storage.prototype.setItem = window.myEnOriginalSetItem })
+  await page.getByRole('button', { name: '이 백업으로 복원' }).click()
+  await expect(page.getByText('백업을 복원하고 저장했습니다.', { exact: false })).toBeVisible()
+  expect(await stored(page)).toEqual(restored)
+})
+
+test('due speaking review offers only that step and preserves later reservations', async ({ page }) => {
+  const state = emptyState('UTC'), today = new Date().toISOString().slice(0, 10)
+  const common = { phraseId: 'hello', phraseVersion: 1 as const, stage: 0, due: today, lastAt: '2026-01-01T12:00:00Z', lastSessionId: 'old', successes: 0, practices: 1, lastOutcome: 'practice' as const, lastAdvancedDay: null }
+  state.reviews['hello:speaking'] = { ...common, skill: 'speaking', evidence: 'selfReported' }
+  state.reviews['hello:recall'] = { ...common, due: '2099-01-01', skill: 'recall', evidence: 'selfReported' }
+  await page.addInitScript(({ key, state }) => { if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(state)) }, { key, state })
+  await page.goto('/')
+  await page.getByRole('button', { name: '복습 시작', exact: true }).click()
+  await page.getByRole('button', { name: '남은 단어는 다음에, 문장으로 가기' }).click()
+  await expect(page.getByRole('heading', { name: '보고, 한 번 따라 말해요.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '먼저, 소리를 들어 보세요.' })).toHaveCount(0)
+  await page.getByRole('button', { name: '따라 말했어요' }).click()
+  await expect(page.getByRole('heading', { name: '오늘의 한 걸음을 남겼어요.' })).toBeVisible()
+  expect((await stored(page)).reviews['hello:recall'].due).toBe('2099-01-01')
 })

@@ -51,6 +51,42 @@ export const modules: { id: ModuleId; title: string; next: string }[] = [
   { id: 'plans', title: '약속', next: '날짜와 장소 정하기' },
 ]
 
+export interface Word {
+  id: string; version: 1; en: string; ko: string; choices: string[]
+  explanation: string; examplePhraseId: string; audio: string
+}
+const word = (id: string, en: string, ko: string, wrong: string[], examplePhraseId: string, explanation: string): Word => ({
+  id, version: 1, en, ko, choices: [ko, ...wrong], examplePhraseId, explanation, audio: `/audio/word-${id}.wav`,
+})
+// A small authored starting set, not a claim about an optimal daily quantity.
+export const words: Word[] = [
+  word('hello', 'hello', '안녕하세요', ['감사합니다', '내일'], 'hello', '처음 만났을 때 건네는 짧은 인사예요.'),
+  word('again', 'again', '다시', ['가까이', '좋은'], 'again', '같은 일을 한 번 더 할 때 써요. 다시 말해 달라고 부탁할 때도 써요.'),
+  word('please', 'please', '부탁해요', ['어디', '배고픈'], 'water', '부탁을 부드럽게 만드는 말이에요. 물을 뜻하는 water 뒤에 붙여 볼 거예요.'),
+  word('nice', 'nice', '좋은', ['내일', '물'], 'nice', '만나서 좋다는 인사에서 nice를 써요. 문장 전체는 “만나서 반가워요”예요.'),
+  word('thank', 'thank', '고마워하다', ['기다리다', '만나다'], 'thanks', 'Thank you.는 상대에게 고맙다고 말하는 표현이에요.'),
+  word('water', 'water', '물', ['커피', '카드'], 'water', 'Water, please.처럼 물을 부탁하는 말에 써요.'),
+  word('coffee', 'coffee', '커피', ['물', '휴식'], 'coffee', 'Coffee, please.처럼 커피를 주문할 때 써요.'),
+  word('much', 'much', '많은', ['가까운', '배고픈'], 'price', 'How much는 양이나 가격을 묻는 덩어리예요. How much is it?은 “얼마인가요?”예요.'),
+  word('card', 'card', '카드', ['화장실', '내일'], 'card', 'by card는 “카드로”라는 뜻이에요. 결제 방법을 말할 때 써요.'),
+  word('where', 'where', '어디', ['다시', '많은'], 'restroom', '장소를 물을 때 문장 앞에 써요.'),
+  word('restroom', 'restroom', '화장실', ['카페', '커피'], 'restroom', '가게나 역에서 찾는 화장실이에요.'),
+  word('near', 'near', '가까이', ['다시', '내일'], 'near', 'Is it near here?에서 “여기서 가까운가요?”라고 확인해요.'),
+  word('hungry', 'hungry', '배고픈', ['고마운', '좋은'], 'hungry', 'I’m hungry.처럼 내 상태를 말할 때 써요.'),
+  word('break', 'break', '휴식', ['카드', '물'], 'break', '여기서는 쉬는 시간을 뜻해요. I need a break.로 잠깐 쉬고 싶다고 말해요.'),
+  word('good', 'good', '좋은', ['많은', '배고픈'], 'good', 'That sounds good.는 상대의 제안이 좋아 보인다는 뜻이에요.'),
+  word('tomorrow', 'tomorrow', '내일', ['다시', '어디'], 'tomorrow', 'See you tomorrow.처럼 다음에 만날 날을 말해요.'),
+]
+export const wordById = Object.fromEntries(words.map(w => [w.id, w]))
+export const phraseWordIds: Record<string, string[]> = {
+  hello: ['hello'], name: [], again: ['again', 'please'], nice: ['nice'], thanks: ['thank'],
+  water: ['water', 'please'], coffee: ['coffee', 'please'], price: ['much'], card: ['card'],
+  restroom: ['where', 'restroom'], near: ['near'], hungry: ['hungry'], break: ['break'], good: ['good'], tomorrow: ['tomorrow'],
+}
+export function matchesWord(input: string, word: Word): boolean {
+  return input.trim().toLocaleLowerCase('en').replace(/[.!?,]+$/g, '') === word.en.toLowerCase()
+}
+
 export function shuffledIndices(length: number, seed: string): number[] {
   const ids = Array.from({ length }, (_, i) => i)
   let n = [...seed].reduce((a, c) => a + c.charCodeAt(0), 1)

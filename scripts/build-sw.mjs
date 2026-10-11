@@ -2,8 +2,8 @@ import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { loadContent } from './load-content.mjs'
-const { phrases } = await loadContent()
-for (const p of phrases) if (!existsSync(join('dist', p.audio))) throw new Error(`음성 없음: ${p.id}. npm run audio:generate 또는 개인 소유 WAV 자산을 먼저 제공하세요.`)
+const { phrases, words } = await loadContent()
+for (const p of [...phrases, ...words]) if (!existsSync(join('dist', p.audio))) throw new Error(`음성 없음: ${p.id}. npm run audio:generate 또는 개인 소유 WAV 자산을 먼저 제공하세요.`)
 const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)])
 const files = walk('dist').filter(f => !f.endsWith('sw.js')).sort()
 const hash = createHash('sha256')
@@ -52,4 +52,4 @@ self.addEventListener('fetch', e => {
   })());
 });
 `)
-console.log(`Offline bundle ${version}: ${urls.length} files, ${phrases.length} voices`)
+console.log(`Offline bundle ${version}: ${urls.length} files, ${phrases.length + words.length} voices`)

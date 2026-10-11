@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { lessons, phrases, shuffledIndices } from './content'
-import { addDays, answer, completedLessons, dayKey, duePhrases, emptyState, patchSession, plan, startSession, type State } from './model'
+import { addDays, answer, completedLessons, dayKey, duePhrases, emptyState, patchSession, plan, skipWordStudy, startSession, type State } from './model'
 import { BACKUP_KEY, STORAGE_KEY, load, parseState, save } from './storage'
 
 const now = new Date('2026-10-04T12:00:00Z')
-const begin = (s = emptyState('UTC'), mode: 'normal' | 'quick' = 'normal') => startSession(s, mode, now, 'session-1')
+const begin = (s = emptyState('UTC'), mode: 'normal' | 'quick' = 'normal') => skipWordStudy(startSession(s, mode, now, 'session-1'), now)
 function phraseRound(s: State, opts: { noSound?: boolean; noSpeak?: boolean; hint?: boolean; incorrect?: boolean; unsure?: boolean } = {}, at = now): State {
   s = patchSession(s, { heard: true })
   s = answer(s, opts.noSound ? 'skipped' : 'heard', at)
@@ -64,7 +64,7 @@ describe('review evidence and progression', () => {
   })
   it('uses configurable intervals and advances each skill separately', () => {
     let s = finish(begin()); s.settings.intervals = [2, 4, 8, 16]
-    s = startSession(s, 'quick', new Date('2026-10-06T12:00:00Z'), 'session-2', true)
+    s = skipWordStudy(startSession(s, 'quick', new Date('2026-10-06T12:00:00Z'), 'session-2', true), new Date('2026-10-06T12:00:00Z'))
     s = phraseRound(s, { hint: true }, new Date('2026-10-06T12:00:00Z'))
     expect(s.reviews['hello:listening']).toMatchObject({ stage: 1, due: '2026-10-10' })
     expect(s.reviews['hello:recall']).toMatchObject({ stage: 0, due: '2026-10-08' })
@@ -74,12 +74,12 @@ describe('review evidence and progression', () => {
     let s = emptyState('UTC')
     for (let i = 0; i < 7; i++) {
       const date = new Date(`2026-10-${String(i + 4).padStart(2, '0')}T12:00:00Z`)
-      s = startSession(s, 'normal', date, `day-session-${i}`)
+      s = skipWordStudy(startSession(s, 'normal', date, `day-session-${i}`), date)
       while (s.active) { // Finish at the same local day as the session.
         s = patchSession(s, { heard: true }); s = answer(s, 'heard', date); s = answer(s, 'correct', date); s = answer(s, 'correct', date); s = answer(s, 'self', date); s = answer(s, 'remembered', date)
       }
     }
-    expect(completedLessons(s).size).toBe(7); expect(Object.keys(s.reviews)).toHaveLength(45)
+    expect(completedLessons(s).size).toBe(7); expect(Object.keys(s.reviews)).toHaveLength(60)
     expect(plan(s, 'normal', new Date('2026-10-20')).lessonId).toBeNull()
   })
 })
@@ -111,10 +111,10 @@ describe('data protection', () => {
   })
   it('reports storage quota or private-mode failures without treating them as learning errors', () => {
     const db = { getItem: () => null, setItem: () => { throw new Error('quota') }, removeItem: () => {} }
-    expect(save(db, emptyState())).toContain('백업')
+    expect(save(db, emptyState()).warning).toContain('백업')
   })
   it('rejects future versions, unknown content, impossible dates and duplicate completions', () => {
-    expect(() => parseState(JSON.stringify({ ...emptyState(), schemaVersion: 2 }))).toThrow()
+    expect(() => parseState(JSON.stringify({ ...emptyState(), schemaVersion: 99 }))).toThrow()
     const s = begin(); s.active!.phraseIds = ['does-not-exist']; expect(() => parseState(JSON.stringify(s))).toThrow()
     const done = finish(begin()); done.completions.push(done.completions[0]); expect(() => parseState(JSON.stringify(done))).toThrow()
     const date = begin(); date.active!.dateKey = '2026-02-30'; expect(() => parseState(JSON.stringify(date))).toThrow()
