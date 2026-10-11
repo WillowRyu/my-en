@@ -176,7 +176,7 @@ describe('lossless compatible records and honest save results', () => {
       let s = skipWordStudy(startSession(emptyState('UTC'), 'normal', now, 'legacy'), now)
       s = { ...s, active: { ...s.active!, step, hints: 2, selectedTokens: [0] } }
       const old = legacy(s), migrated = parseState(JSON.stringify(old))
-      expect(migrated.schemaVersion).toBe(2); expect(migrated.active?.wordStudy).toBeNull()
+      expect(migrated.schemaVersion).toBe(3); expect(migrated.active?.wordStudy).toBeNull()
       expect({ ...migrated.active, wordStudy: undefined, reviewSkills: undefined }).toEqual({ ...old.active, wordStudy: undefined, reviewSkills: undefined })
       expect(migrated.wordAttempts).toEqual([])
     }

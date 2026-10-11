@@ -7,9 +7,12 @@ import { Icon } from './icons'
 import { Study } from './Study'
 import { WordStudy } from './WordStudy'
 import { Settings } from './Settings'
+import { advanceCourse, patchCourseInput, revealCourse, saveDiagnostic, setCoursePath, startCourse, submitCourse, toggleCourseSkip } from './course'
+import { CourseHome, CourseRecord, LearningPathControls } from './CourseHome'
+import { CourseComplete, CourseStudy } from './CourseStudy'
 
-type Route = 'today' | 'study' | 'record' | 'settings' | 'complete'
-const route = (): Route => ['study', 'record', 'settings', 'complete'].includes(location.hash.slice(1)) ? location.hash.slice(1) as Route : 'today'
+type Route = 'today' | 'study' | 'record' | 'settings' | 'complete' | 'course' | 'course-complete'
+const route = (): Route => ['study', 'record', 'settings', 'complete', 'course', 'course-complete'].includes(location.hash.slice(1)) ? location.hash.slice(1) as Route : 'today'
 export default function App() {
   const [initial] = useState(() => { try { return load(localStorage) } catch { return { state: emptyState(), warning: '이 브라우저에서는 기록을 저장할 수 없습니다. 설정에서 백업을 내려받아 주세요.', blocked: false } } })
   const [state, setState] = useState(initial.state)
@@ -55,7 +58,7 @@ export default function App() {
   useEffect(() => {
     document.querySelector<HTMLElement>('main h1')?.focus()
     window.scrollTo({ top: 0, behavior: 'instant' })
-  }, [page, state.active?.step, state.active?.phraseIndex, state.active?.wordStudy?.step, state.active?.wordStudy?.wordIndex])
+  }, [page, state.active?.step, state.active?.phraseIndex, state.active?.wordStudy?.step, state.active?.wordStudy?.wordIndex, state.course.active?.step, state.course.active?.index, state.course.active?.lessonId])
   const begin = (mode: Mode, reviewOnly = false) => {
     if (blockedRef.current) { navigate('settings'); return }
     update(s => startSession(s, mode, new Date(), crypto.randomUUID(), reviewOnly)); navigate('study')
@@ -64,6 +67,16 @@ export default function App() {
     const previous = current.current.active
     update(s => answer(s, outcome, new Date()))
     if (previous && !current.current.active) navigate('complete')
+  }
+  const beginCourse = (reviewOnly = false, lessonId?: string) => {
+    if (blockedRef.current) { navigate('settings'); return }
+    update(s => startCourse(s, new Date(), crypto.randomUUID(), reviewOnly, lessonId))
+    if (current.current.course.active) navigate('course')
+  }
+  const nextCourse = (decision: 'ready' | 'practice' | 'skip') => {
+    const previous = current.current.course.active
+    update(s => advanceCourse(s, decision, new Date()))
+    if (previous && !current.current.course.active) navigate('course-complete')
   }
   const done = completedLessons(state)
   const due = duePhrases(state, now)
@@ -76,7 +89,7 @@ export default function App() {
     <aside className="sidebar">
       <a href="#today" className="brand" aria-label="my-en 오늘"><img src="/icon.svg" alt="" /><span>my-en<small>나의 작은 영어 습관</small></span></a>
       <nav aria-label="주 메뉴">
-        <a href="#today" aria-current={['today', 'study', 'complete'].includes(page) ? 'page' : undefined}><Icon name="home" /><span>오늘 공부</span></a>
+        <a href="#today" aria-current={['today', 'study', 'complete', 'course', 'course-complete'].includes(page) ? 'page' : undefined}><Icon name="home" /><span>오늘 공부</span></a>
         <a href="#record" aria-current={page === 'record' ? 'page' : undefined}><Icon name="book" /><span>나의 기록</span></a>
         <a href="#settings" aria-current={page === 'settings' ? 'page' : undefined}><Icon name="settings" /><span>설정과 백업</span></a>
       </nav>
@@ -85,10 +98,12 @@ export default function App() {
     <main id="main" tabIndex={-1}>
       <div className="topline"><span>{new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'long', timeZone: state.settings.timeZone }).format(now)}</span><span className={`connection ${offline.ready ? 'ready' : ''}`}>{!offline.online ? '오프라인' : offline.ready ? '오프라인 준비됨' : import.meta.env.DEV ? '개발 미리보기' : '오프라인 준비 중'}</span></div>
       {(warning || offline.error || (!offline.online && !offline.ready)) && <div className="notice" role="alert">{warning || offline.error || '아직 저장되지 않은 음성은 오프라인에서 재생되지 않을 수 있습니다. 소리 없이 계속하거나 연결 후 다시 시도해 주세요.'}{blocked && <button className="text-button" onClick={() => navigate('settings')}>복구 화면 열기</button>}</div>}
-      {page === 'study' && state.active ? state.active.wordStudy ? <WordStudy session={state.active} onPatch={patch => update(s => patchWordStudy(s, patch))} onAnswer={outcome => update(s => answerWord(s, outcome, new Date()))} onSkip={() => update(s => skipWordStudy(s, new Date()))} onPause={() => navigate('today')} /> : <Study session={state.active} attempts={state.attempts} onPatch={patch => update(s => patchSession(s, patch))} onAnswer={respond} onPause={() => navigate('today')} /> : page === 'settings' ? <Settings state={state} blocked={blocked} offline={offline} onExport={() => exportData(current.current)} onRestore={next => update(() => next, true)} onSettings={settings => update(s => ({ ...s, settings }))} onReset={() => update(() => emptyState(state.settings.timeZone), true)} onRecover={() => {
+      {page === 'course' && state.course.active ? <CourseStudy session={state.course.active} onInput={text => update(s => patchCourseInput(s, text))} onReveal={() => update(revealCourse)} onSubmit={choice => update(s => submitCourse(s, choice))} onNext={nextCourse} onPause={() => navigate('today')} /> : page === 'course-complete' && state.course.lastFinishedKind ? <CourseComplete state={state} onHome={() => navigate('today')} /> : page === 'study' && state.active ? state.active.wordStudy ? <WordStudy session={state.active} onPatch={patch => update(s => patchWordStudy(s, patch))} onAnswer={outcome => update(s => answerWord(s, outcome, new Date()))} onSkip={() => update(s => skipWordStudy(s, new Date()))} onPause={() => navigate('today')} /> : <Study session={state.active} attempts={state.attempts} onPatch={patch => update(s => patchSession(s, patch))} onAnswer={respond} onPause={() => navigate('today')} /> : page === 'settings' ? <Settings state={state} blocked={blocked} offline={offline} onExport={() => exportData(current.current)} onRestore={next => update(() => next, true)} onSettings={settings => update(s => ({ ...s, settings }))} onReset={() => update(() => emptyState(state.settings.timeZone), true)} onRecover={() => {
         try { const raw = localStorage.getItem(BACKUP_KEY); if (!raw) throw new Error('이전 저장본이 없습니다. 내려받은 백업을 가져와 주세요.'); return update(() => parseState(raw), true) }
         catch (e) { setWarning(e instanceof Error ? e.message : '이전 저장본을 읽지 못했습니다.'); return false }
       }} /> : page === 'record' ? <Record state={state} now={now} onBegin={() => begin('normal', true)} /> : page === 'complete' && state.completions.length ? <Complete state={state} onHome={() => navigate('today')} /> : <>
+        <LearningPathControls state={state} blocked={blocked} onPath={path => update(s => setCoursePath(s, path))} onDiagnostic={answers => update(s => saveDiagnostic(s, answers, new Date()))} />
+        {state.course.path !== 'foundation' ? <CourseHome state={state} now={now} blocked={blocked} onBegin={beginCourse} onSkip={id => update(s => toggleCourseSkip(s, id))} onBasic={() => begin(state.active?.mode ?? 'quick')} /> : <>
         <header className="home-heading"><span className="greeting"><Icon name="sun" />나를 위한 작은 시간</span><h1 tabIndex={-1}>{state.active ? '하던 곳부터 이어 가요.' : todayCompleted ? '오늘의 한 걸음, 잘 마쳤어요.' : '오늘은 영어 한마디부터.'}</h1><p>무엇을 공부할지 고민하지 않아도 돼요.<br className="mobile-break" /> 버튼을 누르면 한 단계씩 안내할게요.</p></header>
         <section className="today-lesson" aria-labelledby="today-title">
           <div className="lesson-copy"><span className="lesson-label">{state.active ? '진행 중인 공부' : lesson ? `${lesson.day}일차 · 새 표현 ${lesson.newPhraseIds.length}개` : '익숙한 표현 다시 만나기'}</span><h2 id="today-title">{lesson?.title ?? '기억을 깨우는 작은 복습'}</h2><p>{lesson?.goal ?? '오늘은 아는 표현을 듣고, 다시 떠올려 보세요.'}</p>
@@ -103,7 +118,7 @@ export default function App() {
           <section className="review-line"><div><h2><Icon name="repeat" />다시 만날 표현</h2><p>{due.length || wordDue.length ? `표현 ${due.length}개 · 단어 ${wordDue.length}개가 기다려요. 조금씩 나눠 확인해요.` : '지금 복습할 표현과 단어는 없어요.'}</p></div><button className="text-button" onClick={() => begin('normal', true)} disabled={(!due.length && !wordDue.length) || blocked || !!state.active}>복습 시작</button></section>
         </div>
         <section className="journey" aria-labelledby="journey-title"><div className="section-heading"><h2 id="journey-title">처음 7일의 작은 여정</h2><span>{done.size}/7 수업 경험</span></div><p className="small">여행과 일상을 가정한 첫 코스예요. 순서대로 자동 안내합니다.</p><ol className="lesson-list">{lessons.map(l => <li key={l.id} className={done.has(`${l.id}@${l.version}`) ? 'done' : lesson?.id === l.id ? 'current' : ''}><span className="day-number">{done.has(`${l.id}@${l.version}`) ? <Icon name="check" /> : l.day}</span><details><summary><span>{l.title}</span><span className="day-description">{l.newPhraseIds.length}개 표현{done.has(`${l.id}@${l.version}`) ? ' · 수업 경험함' : lesson?.id === l.id ? ' · 이번 수업' : ''}</span></summary><div className="lesson-preview"><p>{l.scene}</p>{l.newPhraseIds.map(id => <p key={id}><span lang="en">{phraseById[id].en}</span><br />{phraseById[id].ko}</p>)}</div></details></li>)}</ol></section>
-        <p className="gentle-note">못 온 날은 그냥 쉬었던 날이에요. 밀린 숙제도, 벌점도 없어요.</p>
+        <p className="gentle-note">못 온 날은 그냥 쉬었던 날이에요. 밀린 숙제도, 벌점도 없어요.</p></>}
       </>}
     </main>
   </div>
@@ -119,7 +134,7 @@ function Record({ state, now, onBegin }: { state: State; now: Date; onBegin: () 
         const r = state.reviews[`${p.id}:${skill}`]
         return <div key={skill}><span>{skillNames[skill]}</span><strong>{!r ? '아직 확인 전' : skill === 'speaking' ? '따라 말함 · 내 확인' : skill === 'recall' ? `${r.successes}회 떠올림 · 내 확인` : skill === 'reading' ? `${r.successes}회 문장 확인` : `${r.successes}회 뜻 확인`}</strong><small>{r ? `${r.lastOutcome === 'difficulty' ? '다시 연습할 부분 · ' : ''}다음 확인 ${r.due.slice(5).replace('-', '/')} · ${r.practices}회 연습` : '다음에 확인해도 괜찮아요.'}</small></div>
       })}</div></li>)}</ul> : <section className="empty-state"><Icon name="book" /><h2>첫 한마디부터 기록이 쌓여요.</h2><p>오늘 공부를 마치면 여기에 남습니다.</p><a className="primary" href="#today">오늘 공부로 가기</a></section>}
-      <section className="word-record-section"><h2>문장에 쓰는 단어</h2><p className="small">뜻을 알아본 기록과 영어로 써 본 기록을 나눠 봐요. 발음 점수는 아니에요.</p>{learnedWords.length ? <ul className="phrase-records">{learnedWords.map(w => <li key={w.id}><h3><span lang="en">{w.en}</span> · {w.ko}</h3><div className="skill-grid word-skill-grid">{(Object.keys(wordSkillNames) as (keyof typeof wordSkillNames)[]).map(skill => { const r = state.wordReviews[`${w.id}:${skill}`]; return <div key={skill}><span>{wordSkillNames[skill]}</span><strong>{!r ? '아직 확인 전' : r.lastOutcome === 'difficulty' ? '다시 연습해요' : `${r.successes}회 힌트 없이 확인`}</strong><small>{r ? `다음 확인 ${r.due.slice(5).replace('-', '/')} · ${r.practices}회 연습` : '다음에 확인해도 괜찮아요.'}</small></div> })}</div></li>)}</ul> : <p>단어를 연습하면 여기에 두 방향의 기록이 남아요.</p>}</section></>
+      <CourseRecord state={state} now={now} /><section className="word-record-section"><h2>문장에 쓰는 단어</h2><p className="small">뜻을 알아본 기록과 영어로 써 본 기록을 나눠 봐요. 발음 점수는 아니에요.</p>{learnedWords.length ? <ul className="phrase-records">{learnedWords.map(w => <li key={w.id}><h3><span lang="en">{w.en}</span> · {w.ko}</h3><div className="skill-grid word-skill-grid">{(Object.keys(wordSkillNames) as (keyof typeof wordSkillNames)[]).map(skill => { const r = state.wordReviews[`${w.id}:${skill}`]; return <div key={skill}><span>{wordSkillNames[skill]}</span><strong>{!r ? '아직 확인 전' : r.lastOutcome === 'difficulty' ? '다시 연습해요' : `${r.successes}회 힌트 없이 확인`}</strong><small>{r ? `다음 확인 ${r.due.slice(5).replace('-', '/')} · ${r.practices}회 연습` : '다음에 확인해도 괜찮아요.'}</small></div> })}</div></li>)}</ul> : <p>단어를 연습하면 여기에 두 방향의 기록이 남아요.</p>}</section></>
 }
 function Complete({ state, onHome }: { state: State; onHome: () => void }) {
   const c = state.completions.at(-1)!

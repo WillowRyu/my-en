@@ -9,9 +9,16 @@ const key = 'my-en:progress:v1'
 async function stored(page: Page): Promise<State> { return page.evaluate(k => JSON.parse(localStorage.getItem(k)!), key) }
 async function seed(page: Page, step: Step = 'listen', mode: 'normal' | 'quick' = 'quick') {
   let s = skipWordStudy(startSession(emptyState('UTC'), mode, new Date(), `test-${step}`), new Date())
+  s.course.path = 'foundation'
   s = { ...s, active: { ...s.active!, step, heard: step !== 'listen', phraseIds: ['hello', 'name'] } }
   await page.addInitScript(({ key, state }) => { if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(state)) }, { key, state: s })
   await page.goto('/#study')
+}
+async function openFoundation(page: Page, url = '/') {
+  await page.goto(url)
+  await page.locator('.path-summary').click()
+  await page.getByRole('button', { name: '기초 단어·표현', exact: true }).click()
+  await page.locator('.path-summary').click()
 }
 async function order(page: Page, id: string) {
   for (const token of phraseById[id].tokens) await page.locator('.word-bank').getByRole('button', { name: token, exact: true }).click()
@@ -52,7 +59,7 @@ async function finishCurrent(page: Page, noSound = false) {
 
 test('home, real audio, entire first lesson, separate evidence and no duplicate completion', async ({ page }, info) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message))
-  await page.goto('/')
+  await openFoundation(page)
   await expect(page.getByRole('heading', { name: '오늘은 영어 한마디부터.' })).toBeVisible()
   await expect(page.getByText('오프라인 준비됨', { exact: true })).toBeVisible()
   mkdirSync('docs/screenshots', { recursive: true })
@@ -101,7 +108,7 @@ test('five-minute path and failed audio can finish without fabricated listening 
   await page.route('**/audio/*.wav', route => route.abort())
   // Disable SW for this one failure simulation so its cached assets cannot mask failure.
   await page.addInitScript(() => { Object.defineProperty(navigator, 'serviceWorker', { value: undefined, configurable: true }) })
-  await page.goto('/')
+  await openFoundation(page)
   await page.getByRole('button', { name: '5분만 공부하기' }).click()
   await page.getByRole('button', { name: '모범 음성 듣기', exact: true }).click()
   await expect(page.getByRole('alert').filter({ hasText: '음성' }).first()).toBeVisible()
@@ -191,7 +198,7 @@ test('offline reload includes all audio, cached range playback, and progress', a
   if (server) await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
   const address = server?.address()
   const url = address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '/'
-  await page.goto(url)
+  await openFoundation(page, url)
   await expect(page.getByText('오프라인 준비됨', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '5분만 공부하기' }).click()
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true)
@@ -260,7 +267,7 @@ test('all bundled audio have real PCM samples, UI fits 320px and large desktop',
     expect(dataSize).toBeGreaterThan(8820); expect(peak).toBeGreaterThan(100)
   }
   for (const width of [320, 390, 1440]) {
-    await page.setViewportSize({ width, height: 900 }); await page.goto('/')
+    await page.setViewportSize({ width, height: 900 }); await openFoundation(page)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.getByRole('button', { name: '오늘 공부 시작', exact: true }).click()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -273,7 +280,7 @@ test('all bundled audio have real PCM samples, UI fits 320px and large desktop',
 })
 
 test('words: wrong meaning, reverse recall, hint/input resume, and sentence connection', async ({ page }, info) => {
-  await page.goto('/')
+  await openFoundation(page)
   await page.getByRole('button', { name: '오늘 공부 시작', exact: true }).click()
   await expect(page.getByRole('heading', { name: '이 단어부터 만나 볼까요?' })).toBeVisible()
   expect(await page.getByRole('button', { name: '단어 뜻 확인하기', exact: true }).evaluate(el => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return hit === el || !!hit && el.contains(hit) })).toBe(true)
@@ -303,7 +310,7 @@ test('words: wrong meaning, reverse recall, hint/input resume, and sentence conn
 })
 
 test('quick completion still offers regular lesson today', async ({ page }) => {
-  await page.goto('/')
+  await openFoundation(page)
   await page.getByRole('button', { name: '5분만 공부하기' }).click()
   await finishCurrent(page, true)
   await page.getByRole('button', { name: '오늘은 여기까지', exact: true }).click()
@@ -312,7 +319,7 @@ test('quick completion still offers regular lesson today', async ({ page }) => {
   expect((await stored(page)).active?.lessonId).toBe('day-1')
 })
 
-test('v1 import and load preserve in-flight lesson, exact original bytes, and export v2', async ({ page }) => {
+test('v1 import and load preserve in-flight lesson, exact original bytes, and export v3', async ({ page }) => {
   const current = skipWordStudy(startSession(emptyState('UTC'), 'normal', new Date(), 'old-session'), new Date())
   const old = { schemaVersion: 1, settings: { timeZone: 'UTC', intervals: [1, 3, 7, 14] },
     active: Object.fromEntries(Object.entries({ ...current.active!, step: 'arrange', selectedTokens: [0], hints: 2 }).filter(([k]) => !['wordStudy', 'reviewSkills'].includes(k))),
@@ -323,7 +330,7 @@ test('v1 import and load preserve in-flight lesson, exact original bytes, and ex
   await expect(page.getByRole('button', { name: 'Hello. 빼기' })).toBeVisible()
   expect(await page.evaluate(k => localStorage.getItem(k), key)).toBe(raw)
   await page.getByRole('button', { name: '문장 확인', exact: true }).click()
-  expect((await stored(page)).schemaVersion).toBe(2)
+  expect((await stored(page)).schemaVersion).toBe(3)
   expect(await page.evaluate(() => localStorage.getItem('my-en:previous:v1'))).toBe(raw)
   await page.getByRole('link', { name: '설정과 백업', exact: true }).click()
   await page.locator('input[type=file]').setInputFiles({ name: 'v1.json', mimeType: 'application/json', buffer: Buffer.from(raw) })
@@ -369,7 +376,7 @@ test('due speaking review offers only that step and preserves later reservations
   state.reviews['hello:speaking'] = { ...common, skill: 'speaking', evidence: 'selfReported' }
   state.reviews['hello:recall'] = { ...common, due: '2099-01-01', skill: 'recall', evidence: 'selfReported' }
   await page.addInitScript(({ key, state }) => { if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(state)) }, { key, state })
-  await page.goto('/')
+  await openFoundation(page)
   await page.getByRole('button', { name: '복습 시작', exact: true }).click()
   await page.getByRole('button', { name: '남은 단어는 다음에, 문장으로 가기' }).click()
   await expect(page.getByRole('heading', { name: '보고, 한 번 따라 말해요.' })).toBeVisible()

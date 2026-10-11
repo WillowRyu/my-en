@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { lessons, matchesWord, phraseWordIds, wordById, words } from './content'
 import { legacyStateSchema } from './legacy'
+import { courseSchema, emptyCourse } from './course'
+import { dayKey, addDays } from './calendar'
+export { dayKey, addDays } from './calendar'
 
 export const skillNames = { listening: '듣고 이해함', reading: '문장을 맞춤', speaking: '보고 따라 말함', recall: '힌트 없이 떠올림' } as const
 export type Skill = keyof typeof skillNames
@@ -46,7 +49,7 @@ const wordAttemptSchema = z.object({
   step: z.enum(['learn', 'meaning', 'produce']), outcome: z.enum(['heard', 'correct', 'incorrect', 'skipped']),
   hints: z.number().int().min(0).max(1000), at: timeSchema, newWord: z.boolean(),
 })
-export const stateSchema = z.object({
+export const v2StateSchema = z.object({
   ...legacyStateSchema.shape,
   schemaVersion: z.literal(2),
   settings: z.object({ ...legacyStateSchema.shape.settings.shape, newWordsPerDay: z.number().int().min(1).max(3) }),
@@ -57,7 +60,15 @@ export const stateSchema = z.object({
 }).refine(s => new Set(s.attempts.map(a => a.id)).size === s.attempts.length &&
   new Set(s.wordAttempts.map(a => a.id)).size === s.wordAttempts.length &&
   new Set(s.completions.map(c => c.sessionId)).size === s.completions.length, 'Duplicate records')
+export const stateSchema = z.object({ ...v2StateSchema.shape, schemaVersion: z.literal(3), course: courseSchema }).refine(s =>
+  new Set(s.attempts.map(a => a.id)).size === s.attempts.length &&
+  new Set(s.wordAttempts.map(a => a.id)).size === s.wordAttempts.length &&
+  new Set(s.completions.map(c => c.sessionId)).size === s.completions.length, 'Duplicate records')
 export type State = z.infer<typeof stateSchema>
+export function migrateV2(raw: unknown): State {
+  const old = v2StateSchema.parse(raw)
+  return stateSchema.parse({ ...old, schemaVersion: 3, course: emptyCourse() })
+}
 export type Session = NonNullable<State['active']>
 export type Attempt = State['attempts'][number]
 export type Review = State['reviews'][string]
@@ -67,24 +78,15 @@ export type WordAttempt = State['wordAttempts'][number]
 
 export function migrateLegacy(raw: unknown): State {
   const old = legacyStateSchema.parse(raw)
-  return stateSchema.parse({ ...old, schemaVersion: 2, settings: { ...old.settings, newWordsPerDay: 2 },
+  return stateSchema.parse({ ...old, schemaVersion: 3, course: emptyCourse(), settings: { ...old.settings, newWordsPerDay: 2 },
     active: old.active ? { ...old.active, wordStudy: null, reviewSkills: {} } : null,
     reviews: Object.fromEntries(Object.entries(old.reviews).map(([key, r]) => [key, { ...r, lastOutcome: 'unknown', lastAdvancedDay: null }])),
     wordReviews: {}, wordAttempts: [],
   })
 }
 export function emptyState(timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'): State {
-  return { schemaVersion: 2, settings: { timeZone, intervals: [1, 3, 7, 14], newWordsPerDay: 2 }, active: null,
+  return { schemaVersion: 3, course: emptyCourse(), settings: { timeZone, intervals: [1, 3, 7, 14], newWordsPerDay: 2 }, active: null,
     attempts: [], reviews: {}, completions: [], wordReviews: {}, wordAttempts: [] }
-}
-export function dayKey(now: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
-  const get = (type: string) => parts.find(p => p.type === type)!.value
-  return `${get('year')}-${get('month')}-${get('day')}`
-}
-export function addDays(day: string, n: number): string {
-  const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n)
-  return d.toISOString().slice(0, 10)
 }
 export function completedLessons(s: State): Set<string> {
   return new Set(s.completions.filter(c => c.lessonId && c.mode === 'normal').map(c => `${c.lessonId}@${c.lessonVersion}`))
